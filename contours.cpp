@@ -27,8 +27,8 @@ int main()
     int max_area, cnt_id;
     Rect2d bbox;
 
-    // Camera capture
-    VideoCapture cap("polwhite0530.mp4");
+    // Camera capture (For input video or USB camera)
+    // VideoCapture cap("polwhite0530.mp4");
 
     // Kalman filter
     int stateSize = 6;
@@ -78,28 +78,38 @@ int main()
     kf.processNoiseCov.at<float>(35) = 1;
     
     setIdentity(kf.measurementNoiseCov, Scalar(1e-4));
-
-    // const char* devPath = "/dev/video2";
-    // Withrobot::Camera camera(devPath);    // /* bayer RBG 640 x 480 80 fps */
-    // camera.set_format(640, 480, Withrobot::fourcc_to_pixformat('G','B','G','R'), 1, 80);    // /*
-    //  * get current camera format (image size and frame rate)
-    //  */
-    // Withrobot::camera_format camFormat;
-    // camera.get_current_format(camFormat);    // /*
-    //  * Print infomations
-    //  */
-    // std::string camName = camera.get_dev_name();
-    // std::string camSerialNumber = camera.get_serial_number();    // printf("dev: %s, serial number: %s\n", camName.c_str(), camSerialNumber.c_str());
-    // printf("----------------- Current format informations -----------------\n");
-    // camFormat.print();
-    // printf("---------------------------------------------------------------\n");    // int brightness = camera.get_control("Gain");
-    // int exposure = camera.get_control("Exposure (Absolute)");    // //For indoors - gain=66, exposure=170
-    // camera.set_control("Gain", 120);
-    // //camera.set_control("Gain", brightness);
-    // camera.set_control("Exposure (Absolute)", 100);
-    // //camera.set_control("Exposure (Absolute)", exposure);    // std::string windowName = camName + " " + camSerialNumber;
-    // cv::Mat srcImg(cv::Size(camFormat.width, camFormat.height), CV_8UC1);
-    // cv::Mat frame(cv::Size(camFormat.width, camFormat.height), CV_8UC3);	Mat frame, dst, cdst, cdstP, abs_dst;
+    
+    // Camera capture using oCam
+    const char* devPath = "/dev/video2";
+    Withrobot::Camera camera(devPath);    
+    /* bayer RBG 640 x 480 80 fps */
+    camera.set_format(640, 480, Withrobot::fourcc_to_pixformat('G','B','G','R'), 1, 80);    
+    /*
+     * get current camera format (image size and frame rate)
+     */
+    Withrobot::camera_format camFormat;
+    camera.get_current_format(camFormat);    
+    /*
+     * Print infomations
+     */
+    std::string camName = camera.get_dev_name();
+    std::string camSerialNumber = camera.get_serial_number();    
+    // printf("dev: %s, serial number: %s\n", camName.c_str(), camSerialNumber.c_str());
+    printf("----------------- Current format informations -----------------\n");
+    camFormat.print();
+    printf("---------------------------------------------------------------\n");    
+    // int brightness = camera.get_control("Gain");
+    int exposure = camera.get_control("Exposure (Absolute)");    
+    //For indoors - gain=66, exposure=170
+    camera.set_control("Gain", 40);
+    //camera.set_control("Gain", brightness);
+    camera.set_control("Exposure (Absolute)", 10);
+    //camera.set_control("Exposure (Absolute)", exposure);    
+    // std::string windowName = camName + " " + camSerialNumber;
+    cv::Mat srcImg(cv::Size(camFormat.width, camFormat.height), CV_8UC1);
+    cv::Mat frame(cv::Size(camFormat.width, camFormat.height), CV_8UC3);	
+    
+    // Mat frame;
 
 	int morph_elem = 0;
 	int morph_size = 5;
@@ -118,23 +128,26 @@ int main()
 
         double dT = (ticks - precTicks) / getTickFrequency();
 
-        Mat frame;
-        cap >> frame;
+        // Mat frame;
+        // cap >> frame;
+
+        int size = camera.get_frame(srcImg.data, camFormat.image_size, 1);
+        if (size == -1) {
+            printf("error number: %d\n", errno);
+            perror("Cannot get image from camera");
+            camera.stop();
+            camera.start();
+            continue;
+        }
+
+        cv::cvtColor(srcImg, frame, cv::COLOR_BayerGB2BGR);
+
 
         Mat copy;
         copy = frame.clone();
 
         cout << "Start of loop" << endl;
 
-        
-        // int size = camera.get_frame(srcImg.data, camFormat.image_size, 1);
-        // if (size == -1) {
-        //     printf("error number: %d\n", errno);
-        //     perror("Cannot get image from camera");
-        //     camera.stop();
-        //     camera.start();
-        //     continue;
-        // }
 
         if (found) {
             
@@ -158,7 +171,7 @@ int main()
             cout << "----------------------------------" << endl;
         }
 
-        Mat gray, dst, cdst, cdsP;
+        Mat gray;
         cvtColor(copy, gray, COLOR_BGR2GRAY);        
         threshold( gray, gray, 180, 255, 0 ); 		
         Mat element = getStructuringElement( morph_elem, Size( 2*morph_size + 1, 2*morph_size+1 ), Point( morph_size, morph_size ) );
